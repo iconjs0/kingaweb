@@ -1,0 +1,16 @@
+{
+  "name": "kingaweb",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Continuous external security monitoring for African businesses.",
+  "packageManager": "pnpm@11.19.0",
+  "scripts": {
+    "dev": "pnpm --filter @kingaweb/web dev",
+    "build": "pnpm --filter @kingaweb/web build",
+    "lint": "pnpm --filter @kingaweb/web lint",
+    "typecheck": "pnpm --filter @kingaweb/web typecheck"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
