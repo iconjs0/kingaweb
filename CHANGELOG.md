@@ -24,3 +24,5 @@ All notable changes to KingaWeb will be documented here. The project intends to 
 - Local sign-in and sign-out flows using short-lived HTTP-only session cookies.
 - Authorized domain onboarding with expiring DNS TXT ownership challenges.
 - Bounded DNS verification, tenant-role enforcement and verified asset status transitions.
+- Authorized HTTPS baseline scans with SSRF destination screening, strict timeouts and no redirects.
+- Persisted scan scores and evidence-backed security-header findings in the workspace dashboard.

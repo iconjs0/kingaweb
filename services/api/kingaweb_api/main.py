@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from .assets import router as assets_router
 from .config import get_settings
 from .database import get_db
+from .scans import router as scans_router
 from .workspaces import router as workspaces_router
 
 settings = get_settings()
@@ -46,6 +47,7 @@ app.add_middleware(
 )
 
 app.include_router(assets_router)
+app.include_router(scans_router)
 app.include_router(workspaces_router)
 
 

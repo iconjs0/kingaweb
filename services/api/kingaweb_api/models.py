@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, UniqueConstraint
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -30,6 +30,17 @@ class AssetStatus(StrEnum):
 class VerificationMethod(StrEnum):
     DNS_TXT = "dns_txt"
     HTTP_FILE = "http_file"
+
+
+class ScanStatus(StrEnum):
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class FindingSeverity(StrEnum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
 
 
 class User(Base):
@@ -87,6 +98,7 @@ class Asset(Base):
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     verifications: Mapped[list["DomainVerification"]] = relationship(back_populates="asset")
+    scans: Mapped[list["ScanRun"]] = relationship(back_populates="asset")
 
 
 class DomainVerification(Base):
@@ -103,3 +115,40 @@ class DomainVerification(Base):
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     asset: Mapped[Asset] = relationship(back_populates="verifications")
+
+
+class ScanRun(Base):
+    __tablename__ = "scan_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    asset_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("assets.id", ondelete="CASCADE"), index=True
+    )
+    status: Mapped[ScanStatus] = mapped_column(Enum(ScanStatus, native_enum=False))
+    score: Mapped[int | None] = mapped_column(Integer)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error_message: Mapped[str | None] = mapped_column(String(300))
+
+    asset: Mapped[Asset] = relationship(back_populates="scans")
+    findings: Mapped[list["Finding"]] = relationship(
+        back_populates="scan", cascade="all, delete-orphan"
+    )
+
+
+class Finding(Base):
+    __tablename__ = "findings"
+    __table_args__ = (UniqueConstraint("scan_id", "check_key"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    scan_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("scan_runs.id", ondelete="CASCADE"), index=True
+    )
+    check_key: Mapped[str] = mapped_column(String(80))
+    severity: Mapped[FindingSeverity] = mapped_column(Enum(FindingSeverity, native_enum=False))
+    title: Mapped[str] = mapped_column(String(180))
+    evidence: Mapped[str] = mapped_column(Text)
+    remediation: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+    scan: Mapped[ScanRun] = relationship(back_populates="findings")
