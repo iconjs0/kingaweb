@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from .assets import router as assets_router
 from .config import get_settings
 
 settings = get_settings()
@@ -29,9 +30,11 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
     allow_credentials=False,
-    allow_methods=["GET"],
-    allow_headers=["Accept", "Content-Type"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Accept", "Authorization", "Content-Type"],
 )
+
+app.include_router(assets_router)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["Operations"])

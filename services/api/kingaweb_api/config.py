@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     app_environment: Literal["development", "test", "staging", "production"] = "development"
     app_version: str = "0.1.0"
     allowed_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    database_url: str = "postgresql+psycopg://kingaweb:change-me@localhost:5432/kingaweb"
+    oidc_issuer: str | None = None
+    oidc_audience: str | None = None
+    oidc_jwks_url: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="KINGAWEB_", extra="ignore")
 

@@ -14,3 +14,6 @@ All notable changes to KingaWeb will be documented here. The project intends to 
 - Next.js and TypeScript production web foundation with a responsive landing experience.
 - FastAPI control-plane foundation with validated configuration and health endpoint tests.
 - ADR-0002 recording the initial production application stack.
+- PostgreSQL-ready identity, workspace, membership, asset and domain-verification models.
+- OIDC bearer-token validation boundary and role-based workspace authorization.
+- Initial database migration and secured domain-asset registration contract.
