@@ -9,6 +9,7 @@ export type ChallengeState = {
   workspaceId?: string;
   assetId?: string;
   hostname?: string;
+  verificationMethod?: "dns_txt" | "http_file";
   verificationName?: string;
   verificationValue?: string;
   expiresAt?: string;
@@ -33,10 +34,11 @@ export async function registerAsset(
 ): Promise<ChallengeState> {
   const workspaceId = String(formData.get("workspace_id") ?? "");
   const hostname = String(formData.get("hostname") ?? "");
+  const verificationMethod = String(formData.get("verification_method") ?? "dns_txt");
   const response = await authenticatedRequest(`/v1/workspaces/${workspaceId}/assets`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ hostname, verification_method: "dns_txt" }),
+    body: JSON.stringify({ hostname, verification_method: verificationMethod }),
   });
   if (!response) return initialError("Your session expired. Sign in again.");
   const payload = await response.json();
@@ -46,6 +48,7 @@ export async function registerAsset(
     workspaceId,
     assetId: payload.id,
     hostname: payload.hostname,
+    verificationMethod: payload.verification_method,
     verificationName: payload.verification_name,
     verificationValue: payload.verification_value,
     expiresAt: payload.expires_at,
@@ -61,6 +64,7 @@ export async function verifyRegisteredAsset(
   const challenge: ChallengeState = {
     status: "challenge", workspaceId, assetId,
     hostname: String(formData.get("hostname") ?? ""),
+    verificationMethod: String(formData.get("verification_method") ?? "dns_txt") as "dns_txt" | "http_file",
     verificationName: String(formData.get("verification_name") ?? ""),
     verificationValue: String(formData.get("verification_value") ?? ""),
     expiresAt: String(formData.get("expires_at") ?? ""),

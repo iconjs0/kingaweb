@@ -1,4 +1,3 @@
-import ipaddress
 import socket
 import ssl
 import uuid
@@ -22,6 +21,7 @@ from .models import (
     ScanStatus,
     WorkspaceRole,
 )
+from .network import resolve_public_addresses
 
 router = APIRouter(prefix="/v1/workspaces/{workspace_id}/assets/{asset_id}/scans", tags=["Scans"])
 PrincipalDep = Annotated[Principal, Depends(get_current_principal)]
@@ -38,21 +38,6 @@ class ProbeResult(BaseModel):
 
 class WebProbe(Protocol):
     def __call__(self, hostname: str) -> ProbeResult: ...
-
-
-def resolve_public_addresses(hostname: str) -> list[str]:
-    try:
-        records = socket.getaddrinfo(hostname, 443, type=socket.SOCK_STREAM)
-    except socket.gaierror as error:
-        raise ValueError("Domain could not be resolved") from error
-    addresses = sorted({record[4][0] for record in records})
-    if not addresses:
-        raise ValueError("Domain did not resolve to an address")
-    for address in addresses:
-        ip = ipaddress.ip_address(address)
-        if not ip.is_global:
-            raise ValueError("Domain resolves to a private or reserved network")
-    return addresses
 
 
 def probe_https(hostname: str) -> ProbeResult:

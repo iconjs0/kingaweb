@@ -1,6 +1,8 @@
 import hashlib
 import ipaddress
 import secrets
+import socket
+import ssl
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Protocol
@@ -24,6 +26,7 @@ from .models import (
     VerificationMethod,
     WorkspaceRole,
 )
+from .network import resolve_public_addresses
 
 router = APIRouter(prefix="/v1/workspaces/{workspace_id}/assets", tags=["Assets"])
 WRITE_ROLES = {WorkspaceRole.OWNER, WorkspaceRole.ADMIN, WorkspaceRole.ANALYST}
@@ -55,6 +58,45 @@ def get_txt_lookup() -> TxtLookup:
 TxtLookupDep = Annotated[TxtLookup, Depends(get_txt_lookup)]
 
 
+class HttpProofLookup(Protocol):
+    def __call__(self, hostname: str) -> str | None: ...
+
+
+def lookup_http_proof(hostname: str) -> str | None:
+    context = ssl.create_default_context()
+    for address in resolve_public_addresses(hostname):
+        try:
+            with socket.create_connection((address, 443), timeout=4) as connection:
+                connection.settimeout(6)
+                with context.wrap_socket(connection, server_hostname=hostname) as secure:
+                    request = (
+                        "GET /.well-known/kingaweb-verification.txt HTTP/1.1\r\n"
+                        f"Host: {hostname}\r\nUser-Agent: KingaWeb-Verifier/0.1\r\n"
+                        "Accept: text/plain\r\nConnection: close\r\n\r\n"
+                    )
+                    secure.sendall(request.encode("ascii"))
+                    response = bytearray()
+                    while len(response) < 8192:
+                        chunk = secure.recv(2048)
+                        if not chunk:
+                            break
+                        response.extend(chunk)
+                    header, separator, body = bytes(response).partition(b"\r\n\r\n")
+                    if not separator or not header.startswith(b"HTTP/1.1 200"):
+                        continue
+                    return body[:4096].decode("utf-8").strip()
+        except (OSError, ssl.SSLError, UnicodeError):
+            continue
+    return None
+
+
+def get_http_proof_lookup() -> HttpProofLookup:
+    return lookup_http_proof
+
+
+HttpProofLookupDep = Annotated[HttpProofLookup, Depends(get_http_proof_lookup)]
+
+
 def normalize_hostname(value: str) -> str:
     candidate = value.strip().lower().rstrip(".")
     if "://" in candidate or "/" in candidate or not candidate:
@@ -79,8 +121,7 @@ def normalize_hostname(value: str) -> str:
     if invalid_edges:
         raise ValueError("Hostname is not valid")
     invalid_characters = any(
-        not all(character.isalnum() or character == "-" for character in label)
-        for label in labels
+        not all(character.isalnum() or character == "-" for character in label) for label in labels
     )
     if invalid_characters:
         raise ValueError("Hostname is not valid")
@@ -95,13 +136,6 @@ class AssetCreate(BaseModel):
     @classmethod
     def validate_hostname(cls, value: str) -> str:
         return normalize_hostname(value)
-
-    @field_validator("verification_method")
-    @classmethod
-    def validate_verification_method(cls, value: VerificationMethod) -> VerificationMethod:
-        if value is not VerificationMethod.DNS_TXT:
-            raise ValueError("Only DNS TXT verification is enabled in this release")
-        return value
 
 
 class AssetCreated(BaseModel):
@@ -166,7 +200,11 @@ def create_asset(
             status_code=409, detail="Asset already exists in this workspace"
         ) from error
 
-    verification_name = f"_kingaweb-verification.{asset.hostname}"
+    verification_name = (
+        f"_kingaweb-verification.{asset.hostname}"
+        if verification.method == VerificationMethod.DNS_TXT
+        else f"https://{asset.hostname}/.well-known/kingaweb-verification.txt"
+    )
     verification_value = f"kingaweb-verification={token}"
     return AssetCreated(
         id=asset.id,
@@ -186,11 +224,10 @@ def verify_asset(
     principal: PrincipalDep,
     db: DatabaseDep,
     txt_lookup: TxtLookupDep,
+    http_proof_lookup: HttpProofLookupDep,
 ) -> AssetVerificationResult:
     require_workspace_member(db, workspace_id, principal, WRITE_ROLES)
-    asset = db.scalar(
-        select(Asset).where(Asset.id == asset_id, Asset.workspace_id == workspace_id)
-    )
+    asset = db.scalar(select(Asset).where(Asset.id == asset_id, Asset.workspace_id == workspace_id))
     if asset is None:
         raise HTTPException(status_code=404, detail="Asset not found")
     if asset.status == AssetStatus.VERIFIED:
@@ -217,12 +254,14 @@ def verify_asset(
     if expires_at <= datetime.now(UTC):
         raise HTTPException(status_code=410, detail="Verification challenge has expired")
 
-    verification_name = f"_kingaweb-verification.{asset.hostname}"
-    records = txt_lookup(verification_name)
+    records = (
+        txt_lookup(f"_kingaweb-verification.{asset.hostname}")
+        if verification.method == VerificationMethod.DNS_TXT
+        else [http_proof_lookup(asset.hostname) or ""]
+    )
     matched = any(
         record.startswith("kingaweb-verification=")
-        and
-        secrets.compare_digest(
+        and secrets.compare_digest(
             hashlib.sha256(record.removeprefix("kingaweb-verification=").encode()).hexdigest(),
             verification.token_hash,
         )
@@ -232,7 +271,11 @@ def verify_asset(
         return AssetVerificationResult(
             verified=False,
             status=asset.status.value,
-            detail="Matching DNS TXT record was not found yet",
+            detail=(
+                "Matching DNS TXT record was not found yet"
+                if verification.method == VerificationMethod.DNS_TXT
+                else "Matching HTTPS verification file was not found yet"
+            ),
         )
 
     verified_at = datetime.now(UTC)

@@ -48,9 +48,11 @@ def test_hostname_normalization_and_ip_rejection() -> None:
         normalize_hostname("https://example.com/path")
 
 
-def test_unsupported_verification_method_is_rejected() -> None:
-    with pytest.raises(ValueError, match="Only DNS TXT"):
-        AssetCreate(hostname="example.co.tz", verification_method=VerificationMethod.HTTP_FILE)
+def test_http_file_verification_method_is_supported() -> None:
+    request = AssetCreate(
+        hostname="example.co.tz", verification_method=VerificationMethod.HTTP_FILE
+    )
+    assert request.verification_method == VerificationMethod.HTTP_FILE
 
 
 def test_analyst_can_create_asset_and_plaintext_token_is_not_stored(db: Session) -> None:
@@ -91,7 +93,12 @@ def test_matching_dns_record_verifies_asset(db: Session) -> None:
     created = create_asset(workspace.id, AssetCreate(hostname="example.co.tz"), principal, db)
 
     result = verify_asset(
-        workspace.id, created.id, principal, db, lambda name: [created.verification_value]
+        workspace.id,
+        created.id,
+        principal,
+        db,
+        lambda name: [created.verification_value],
+        lambda hostname: None,
     )
 
     asset = db.get(Asset, created.id)
@@ -107,7 +114,12 @@ def test_wrong_or_unprefixed_dns_record_does_not_verify_asset(db: Session) -> No
     raw_token = created.verification_value.removeprefix("kingaweb-verification=")
 
     result = verify_asset(
-        workspace.id, created.id, principal, db, lambda name: [raw_token, "wrong-value"]
+        workspace.id,
+        created.id,
+        principal,
+        db,
+        lambda name: [raw_token, "wrong-value"],
+        lambda hostname: None,
     )
 
     asset = db.get(Asset, created.id)
@@ -125,7 +137,9 @@ def test_expired_dns_challenge_is_rejected(db: Session) -> None:
     db.commit()
 
     with pytest.raises(HTTPException) as error:
-        verify_asset(workspace.id, created.id, principal, db, lambda name: [])
+        verify_asset(
+            workspace.id, created.id, principal, db, lambda name: [], lambda hostname: None
+        )
 
     assert error.value.status_code == 410
 
@@ -146,6 +160,31 @@ def test_viewer_cannot_verify_asset(db: Session) -> None:
             Principal(subject=viewer.oidc_subject, email=viewer.email, name=None),
             db,
             lambda name: [created.verification_value],
+            lambda hostname: None,
         )
 
     assert error.value.status_code == 403
+
+
+def test_matching_https_file_verifies_asset(db: Session) -> None:
+    workspace, principal = seed_member(db, WorkspaceRole.OWNER)
+    created = create_asset(
+        workspace.id,
+        AssetCreate(hostname="lab.example.com", verification_method=VerificationMethod.HTTP_FILE),
+        principal,
+        db,
+    )
+
+    result = verify_asset(
+        workspace.id,
+        created.id,
+        principal,
+        db,
+        lambda name: [],
+        lambda hostname: created.verification_value,
+    )
+
+    assert created.verification_name == (
+        "https://lab.example.com/.well-known/kingaweb-verification.txt"
+    )
+    assert result.verified is True

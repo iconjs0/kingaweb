@@ -20,7 +20,8 @@ from kingaweb_api.models import (
     Workspace,
     WorkspaceRole,
 )
-from kingaweb_api.scans import ProbeResult, parse_http_headers, resolve_public_addresses, run_scan
+from kingaweb_api.network import resolve_public_addresses
+from kingaweb_api.scans import ProbeResult, parse_http_headers, run_scan
 
 
 @pytest.fixture

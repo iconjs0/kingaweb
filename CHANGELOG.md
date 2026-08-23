@@ -28,3 +28,5 @@ All notable changes to KingaWeb will be documented here. The project intends to 
 - Persisted scan scores and evidence-backed security-header findings in the workspace dashboard.
 - DNS-rebinding-resistant scans pinned to validated public IP addresses.
 - TLS protocol and certificate-expiry observations with proactive renewal findings.
+- Pinned HTTPS-file ownership verification for authorized web targets without DNS access.
+- DNS or HTTPS proof selection in the authenticated asset-onboarding workflow.
