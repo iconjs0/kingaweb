@@ -13,6 +13,7 @@ build/
 coverage/
 .turbo/
 *.tsbuildinfo
+apps/web/next-env.d.ts
 
 # Python
 __pycache__/
