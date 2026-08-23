@@ -17,7 +17,21 @@ const signals = [
   { label: "Email protection", status: "Protected", tone: "good", detail: "DMARC enforced" },
 ];
 
-export default function Home() {
+async function getPlatformReadiness(): Promise<boolean> {
+  const apiUrl = process.env.KINGAWEB_API_URL ?? "http://127.0.0.1:8000";
+  try {
+    const response = await fetch(`${apiUrl}/ready`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(1500),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+export default async function Home() {
+  const platformReady = await getPlatformReadiness();
   return (
     <main>
       <nav className="nav shell" aria-label="Primary navigation">
@@ -76,6 +90,11 @@ export default function Home() {
       </section>
 
       <section className="early shell" id="early-access"><div><span className="eyebrow light">Private foundation release</span><h2>Help shape security that fits your business.</h2></div><a className="button lightButton" href="mailto:hello@kingaweb.co.tz">Request early access <Arrow /></a></section>
+      <footer className="footer shell">
+        <a className="brand" href="#top"><span className="brandMark"><Shield size={20} /></span><span>Kinga<span>Web</span></span></a>
+        <p>Defensive security monitoring, built responsibly in Tanzania.</p>
+        <span className={`platformStatus ${platformReady ? "online" : "offline"}`}><i /> {platformReady ? "Local platform operational" : "Platform API offline"}</span>
+      </footer>
     </main>
   );
 }

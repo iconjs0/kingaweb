@@ -19,6 +19,8 @@ apps/web/next-env.d.ts
 __pycache__/
 *.py[cod]
 *.egg-info/
+*-development.db
+*-development.db-journal
 .venv/
 venv/
 .pytest_cache/

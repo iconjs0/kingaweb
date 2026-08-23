@@ -4,6 +4,17 @@ FastAPI-based service responsible for identity integration, workspaces, authoriz
 
 ## Development
 
+For a zero-container local environment from the repository root:
+
+```bash
+./scripts/setup-local-api.sh
+./scripts/start-local-api.sh
+```
+
+This creates an ignored SQLite development database, applies the same Alembic migration used for PostgreSQL and seeds an idempotent development workspace. SQLite is a local convenience only; staging and production remain PostgreSQL.
+
+Manual setup:
+
 ```bash
 cd services/api
 python3 -m venv .venv
@@ -12,7 +23,7 @@ pip install -e '.[dev]'
 uvicorn kingaweb_api.main:app --reload --port 8000
 ```
 
-The health endpoint is available at `http://127.0.0.1:8000/health` and development API documentation at `http://127.0.0.1:8000/docs`.
+The liveness endpoint is available at `http://127.0.0.1:8000/health`, database readiness at `http://127.0.0.1:8000/ready` and development API documentation at `http://127.0.0.1:8000/docs`.
 
 Run database migrations after configuring `KINGAWEB_DATABASE_URL`:
 

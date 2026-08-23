@@ -1,11 +1,15 @@
 from datetime import UTC, datetime
+from typing import Annotated
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from .assets import router as assets_router
 from .config import get_settings
+from .database import get_db
 
 settings = get_settings()
 
@@ -15,6 +19,12 @@ class HealthResponse(BaseModel):
     service: str
     version: str
     environment: str
+    timestamp: datetime
+
+
+class ReadinessResponse(BaseModel):
+    status: str
+    database: str
     timestamp: datetime
 
 
@@ -46,3 +56,12 @@ async def health() -> HealthResponse:
         environment=settings.app_environment,
         timestamp=datetime.now(UTC),
     )
+
+
+@app.get("/ready", response_model=ReadinessResponse, tags=["Operations"])
+def readiness(db: Annotated[Session, Depends(get_db)]) -> ReadinessResponse:
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as error:
+        raise HTTPException(status_code=503, detail="Database is unavailable") from error
+    return ReadinessResponse(status="ready", database="connected", timestamp=datetime.now(UTC))

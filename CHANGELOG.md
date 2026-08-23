@@ -17,3 +17,5 @@ All notable changes to KingaWeb will be documented here. The project intends to 
 - PostgreSQL-ready identity, workspace, membership, asset and domain-verification models.
 - OIDC bearer-token validation boundary and role-based workspace authorization.
 - Initial database migration and secured domain-asset registration contract.
+- Repeatable zero-container local API setup with migrated SQLite development storage.
+- Separate liveness and database-readiness endpoints for operational monitoring.
