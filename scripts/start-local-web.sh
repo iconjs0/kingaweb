@@ -2,8 +2,6 @@
 set -euo pipefail
 
 REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-API_DIRECTORY="${REPOSITORY_ROOT}/services/api"
-DATABASE_FILE="${API_DIRECTORY}/kingaweb-development.db"
 SECRET_FILE="${REPOSITORY_ROOT}/.kingaweb-development-secret"
 
 if [[ ! -s "${SECRET_FILE}" ]]; then
@@ -11,9 +9,8 @@ if [[ ! -s "${SECRET_FILE}" ]]; then
   exit 1
 fi
 
-export KINGAWEB_APP_ENVIRONMENT=development
-export KINGAWEB_DATABASE_URL="sqlite+pysqlite:///${DATABASE_FILE}"
+export KINGAWEB_API_URL="http://127.0.0.1:8000"
 export KINGAWEB_DEV_AUTH_SECRET="$(<"${SECRET_FILE}")"
 
-cd "${API_DIRECTORY}"
-exec .venv/bin/uvicorn kingaweb_api.main:app --reload --host 127.0.0.1 --port 8000
+cd "${REPOSITORY_ROOT}"
+exec pnpm --filter @kingaweb/web dev

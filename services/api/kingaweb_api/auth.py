@@ -18,7 +18,35 @@ class Principal:
     name: str | None
 
 
-def verify_oidc_token(token: str, settings: Settings) -> Principal:
+def principal_from_claims(claims: dict[str, object]) -> Principal:
+    return Principal(
+        subject=str(claims["sub"]),
+        email=str(claims["email"]) if claims.get("email") else None,
+        name=str(claims["name"]) if claims.get("name") else None,
+    )
+
+
+def verify_access_token(token: str, settings: Settings) -> Principal:
+    algorithm = jwt.get_unverified_header(token).get("alg")
+    if algorithm == "HS256":
+        if settings.app_environment != "development" or not settings.dev_auth_secret:
+            raise HTTPException(status_code=401, detail="Development authentication is disabled")
+        if len(settings.dev_auth_secret) < 32:
+            raise HTTPException(
+                status_code=503, detail="Development authentication is misconfigured"
+            )
+        claims = jwt.decode(
+            token,
+            settings.dev_auth_secret,
+            algorithms=["HS256"],
+            audience="kingaweb-api",
+            issuer="kingaweb-local",
+            options={"require": ["exp", "iat", "iss", "sub"]},
+        )
+        return principal_from_claims(claims)
+
+    if algorithm != "RS256":
+        raise HTTPException(status_code=401, detail="Unsupported access token algorithm")
     if not settings.oidc_issuer or not settings.oidc_audience or not settings.oidc_jwks_url:
         raise HTTPException(status_code=503, detail="Identity provider is not configured")
 
@@ -32,7 +60,7 @@ def verify_oidc_token(token: str, settings: Settings) -> Principal:
         issuer=settings.oidc_issuer,
         options={"require": ["exp", "iat", "iss", "sub"]},
     )
-    return Principal(subject=claims["sub"], email=claims.get("email"), name=claims.get("name"))
+    return principal_from_claims(claims)
 
 
 def get_current_principal(
@@ -42,7 +70,7 @@ def get_current_principal(
     if credentials is None:
         raise HTTPException(status_code=401, detail="Authentication required")
     try:
-        return verify_oidc_token(credentials.credentials, settings)
+        return verify_access_token(credentials.credentials, settings)
     except HTTPException:
         raise
     except jwt.PyJWTError as error:

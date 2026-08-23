@@ -42,7 +42,7 @@ export default async function Home() {
         <div className="navLinks">
           <a href="#platform">Platform</a><a href="#intelligence">Intelligence</a><a href="#agencies">For agencies</a>
         </div>
-        <div className="navActions"><a className="textButton" href="#signin">Sign in</a><a className="button buttonSmall" href="#early-access">Join early access</a></div>
+        <div className="navActions"><a className="textButton" href="/signin">Sign in</a><a className="button buttonSmall" href="#early-access">Join early access</a></div>
       </nav>
 
       <section className="hero shell" id="top">

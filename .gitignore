@@ -21,6 +21,7 @@ __pycache__/
 *.egg-info/
 *-development.db
 *-development.db-journal
+.kingaweb-development-secret
 .venv/
 venv/
 .pytest_cache/

@@ -19,3 +19,6 @@ All notable changes to KingaWeb will be documented here. The project intends to 
 - Initial database migration and secured domain-asset registration contract.
 - Repeatable zero-container local API setup with migrated SQLite development storage.
 - Separate liveness and database-readiness endpoints for operational monitoring.
+- Development-only signed sessions with production-enforced RS256 OIDC boundaries.
+- Protected workspace dashboard and tenant-scoped workspace/asset read APIs.
+- Local sign-in and sign-out flows using short-lived HTTP-only session cookies.

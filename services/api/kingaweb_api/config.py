@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     oidc_issuer: str | None = None
     oidc_audience: str | None = None
     oidc_jwks_url: str | None = None
+    dev_auth_secret: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="KINGAWEB_", extra="ignore")
 
