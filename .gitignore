@@ -1,0 +1,47 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# JavaScript / TypeScript
+node_modules/
+.next/
+dist/
+build/
+coverage/
+.turbo/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.~*
+
+# Runtime and generated artifacts
+tmp/
+logs/
+*.log
+.cache/
+
+# Infrastructure
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# Test artifacts
+playwright-report/
+test-results/

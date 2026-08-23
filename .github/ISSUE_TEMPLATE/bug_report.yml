@@ -1,0 +1,42 @@
+name: Bug report
+description: Report reproducible incorrect behavior without sensitive security details.
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: "Do not report vulnerabilities here. Follow SECURITY.md and remove customer data or credentials."
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest safe, authorized reproduction.
+      placeholder: "1. Go to…\n2. Select…\n3. Observe…"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: v0.x.y or commit SHA
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser, operating system, deployment type and other relevant details.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I removed secrets, personal information and unredacted customer evidence.
+          required: true
+        - label: This report does not disclose a security vulnerability.
+          required: true

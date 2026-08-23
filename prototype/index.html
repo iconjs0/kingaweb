@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="KingaWeb monitors website security, HTTPS, and availability.">
+  <title>KingaWeb — See risks early</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="nav shell">
+    <a class="brand" href="#top" aria-label="KingaWeb home"><span class="brand-mark">K</span>KingaWeb</a>
+    <nav aria-label="Primary navigation">
+      <a href="#features">What we check</a>
+      <a href="#scanner">Security check</a>
+    </nav>
+    <a class="button button-small" href="#scanner">Check a website</a>
+  </header>
+
+  <main id="top">
+    <section class="hero shell">
+      <div class="hero-copy">
+        <p class="eyebrow"><span></span> Website security, made understandable</p>
+        <h1>See risks early.<br><em>Stay protected.</em></h1>
+        <p class="lead">KingaWeb monitors the security signals that small businesses cannot afford to overlook—without the confusing reports.</p>
+        <div class="hero-actions">
+          <a class="button" href="#scanner">Run a free check</a>
+          <a class="text-link" href="#features">Explore protection <span>→</span></a>
+        </div>
+        <p class="trust">Low-impact checks · No exploitation · Clear recommendations</p>
+      </div>
+      <div class="hero-card" aria-hidden="true">
+        <div class="card-top"><span>Security overview</span><span class="live">● Live</span></div>
+        <div class="score-ring"><strong>86</strong><small>GOOD</small></div>
+        <div class="signal"><span><i class="ok"></i> HTTPS enabled</span><b>Protected</b></div>
+        <div class="signal"><span><i class="ok"></i> Certificate</span><b>Valid</b></div>
+        <div class="signal"><span><i class="warn"></i> Security headers</span><b>2 missing</b></div>
+        <div class="pulse"></div>
+      </div>
+    </section>
+
+    <section class="features shell" id="features">
+      <div><p class="eyebrow"><span></span> Your digital perimeter</p><h2>One clear view of your website’s health.</h2></div>
+      <div class="feature-grid">
+        <article><span class="icon">⌁</span><h3>HTTPS & certificates</h3><p>Know whether connections are encrypted and get early warning before certificates expire.</p></article>
+        <article><span class="icon">⌁</span><h3>Security headers</h3><p>Identify missing browser protections and receive direct, practical remediation advice.</p></article>
+        <article><span class="icon">⌁</span><h3>Availability</h3><p>Measure response time and confirm that customers can reach your website.</p></article>
+      </div>
+    </section>
+
+    <section class="scanner-wrap" id="scanner">
+      <div class="scanner shell">
+        <div>
+          <p class="eyebrow light"><span></span> First security check</p>
+          <h2>How exposed is your website?</h2>
+          <p>Enter a public website you own or are authorized to test. KingaWeb performs one safe, low-impact request.</p>
+        </div>
+        <form id="scan-form" class="scan-form">
+          <label for="domain">Website address</label>
+          <div class="input-row"><input id="domain" name="domain" type="text" inputmode="url" placeholder="example.co.tz" autocomplete="url" required><button type="submit">Check security</button></div>
+          <label class="consent"><input id="consent" type="checkbox" required> I own this website or have permission to check it.</label>
+          <p id="form-status" class="form-status" role="status"></p>
+        </form>
+      </div>
+      <section id="results" class="results shell" hidden aria-live="polite"></section>
+    </section>
+  </main>
+
+  <footer class="shell"><a class="brand" href="#top"><span class="brand-mark">K</span>KingaWeb</a><p>Defensive monitoring for a safer web.</p><p>Built responsibly in Tanzania.</p></footer>
+  <script src="app.js"></script>
+</body>
+</html>
