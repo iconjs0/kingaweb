@@ -26,3 +26,5 @@ All notable changes to KingaWeb will be documented here. The project intends to 
 - Bounded DNS verification, tenant-role enforcement and verified asset status transitions.
 - Authorized HTTPS baseline scans with SSRF destination screening, strict timeouts and no redirects.
 - Persisted scan scores and evidence-backed security-header findings in the workspace dashboard.
+- DNS-rebinding-resistant scans pinned to validated public IP addresses.
+- TLS protocol and certificate-expiry observations with proactive renewal findings.

@@ -129,6 +129,10 @@ class ScanRun(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error_message: Mapped[str | None] = mapped_column(String(300))
+    target_ip: Mapped[str | None] = mapped_column(String(45))
+    http_status: Mapped[int | None] = mapped_column(Integer)
+    tls_version: Mapped[str | None] = mapped_column(String(20))
+    certificate_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     asset: Mapped[Asset] = relationship(back_populates="scans")
     findings: Mapped[list["Finding"]] = relationship(

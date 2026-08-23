@@ -1,5 +1,6 @@
 import socket
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import HTTPException
@@ -19,7 +20,7 @@ from kingaweb_api.models import (
     Workspace,
     WorkspaceRole,
 )
-from kingaweb_api.scans import ProbeResult, resolve_public_addresses, run_scan
+from kingaweb_api.scans import ProbeResult, parse_http_headers, resolve_public_addresses, run_scan
 
 
 @pytest.fixture
@@ -118,3 +119,45 @@ def test_private_destination_is_rejected(monkeypatch: pytest.MonkeyPatch) -> Non
 
     with pytest.raises(ValueError, match="private or reserved"):
         resolve_public_addresses("internal.example")
+
+
+def test_http_headers_are_parsed_without_reading_response_body() -> None:
+    status, headers = parse_http_headers(
+        b"HTTP/1.1 204 No Content\r\nX-Content-Type-Options: nosniff\r\n\r\nignored"
+    )
+
+    assert status == 204
+    assert headers == {"x-content-type-options": "nosniff"}
+
+
+def test_certificate_expiry_creates_high_severity_finding(db: Session) -> None:
+    workspace, asset, principal = seed_asset(db)
+    result = run_scan(
+        workspace.id,
+        asset.id,
+        principal,
+        db,
+        lambda hostname: ProbeResult(
+            status_code=200,
+            headers={
+                check: "present"
+                for check in (
+                    "strict-transport-security",
+                    "content-security-policy",
+                    "x-content-type-options",
+                    "x-frame-options",
+                    "referrer-policy",
+                    "permissions-policy",
+                )
+            },
+            target_ip="203.0.113.20",
+            tls_version="TLSv1.3",
+            certificate_expires_at=datetime.now(UTC) + timedelta(days=7),
+        ),
+    )
+
+    assert result.score == 80
+    assert result.target_ip == "203.0.113.20"
+    assert result.tls_version == "TLSv1.3"
+    assert result.findings[0].check_key == "certificate_expiry"
+    assert result.findings[0].severity == "high"
