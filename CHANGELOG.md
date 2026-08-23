@@ -22,3 +22,5 @@ All notable changes to KingaWeb will be documented here. The project intends to 
 - Development-only signed sessions with production-enforced RS256 OIDC boundaries.
 - Protected workspace dashboard and tenant-scoped workspace/asset read APIs.
 - Local sign-in and sign-out flows using short-lived HTTP-only session cookies.
+- Authorized domain onboarding with expiring DNS TXT ownership challenges.
+- Bounded DNS verification, tenant-role enforcement and verified asset status transitions.

@@ -9,6 +9,7 @@ description = "KingaWeb control-plane API"
 requires-python = ">=3.12"
 dependencies = [
   "alembic>=1.16,<2",
+  "dnspython>=2.8,<3",
   "fastapi>=0.116,<1",
   "psycopg[binary]>=3.2,<4",
   "pyjwt[crypto]>=2.10,<3",

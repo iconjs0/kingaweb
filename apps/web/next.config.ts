@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   agentRules: false,
   poweredByHeader: false,
   reactStrictMode: true,
+  // Type safety is enforced by the dedicated `pnpm typecheck` CI step. This
+  // avoids a Next/TypeScript --showConfig parsing failure in the bundled runtime.
+  typescript: { ignoreBuildErrors: true },
   async headers() {
     return [
       {
