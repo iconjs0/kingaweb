@@ -1,6 +1,7 @@
 const form = document.querySelector('#scan-form');
 const statusNode = document.querySelector('#form-status');
 const results = document.querySelector('#results');
+const isPagesPreview = window.location.hostname.endsWith('.github.io');
 
 const escapeHtml = (value) => String(value).replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
 
@@ -14,6 +15,22 @@ form.addEventListener('submit', async (event) => {
   results.hidden = true;
 
   try {
+    if (isPagesPreview) {
+      await new Promise(resolve => setTimeout(resolve, 650));
+      renderResults({
+        host: domain,
+        score: 86,
+        summary: 'Development preview',
+        checks: [
+          {name: 'HTTPS', status: 'pass', label: 'Protected', detail: 'Demo result: HTTPS monitoring is ready to connect to the KingaWeb API.'},
+          {name: 'TLS certificate', status: 'pass', label: 'Valid', detail: 'Demo result: certificate validity and expiry monitoring.'},
+          {name: 'Security headers', status: 'caution', label: 'Review', detail: 'Demo result: browser protection headers will be assessed safely.'},
+          {name: 'Availability', status: 'pass', label: 'Online', detail: 'Demo result: uptime and response-time monitoring.'}
+        ]
+      });
+      statusNode.textContent = 'Demo check complete — no request was sent to the website.';
+      return;
+    }
     const response = await fetch('/api/scan', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
