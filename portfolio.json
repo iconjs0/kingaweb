@@ -1,1 +1,14 @@
-
+{
+  "title": "KingaWeb",
+  "subtitle": "External Security Monitoring & Remediation Platform",
+  "category": "WEB SECURITY • SECURITY ENGINEERING",
+  "status": "PRE-ALPHA",
+  "summary": "A mobile-first security platform being developed to help organizations discover public-facing security risks, understand their impact, manage remediation and verify that fixes worked.",
+  "workstreams": [
+    "HTTPS, TLS and security-header inspection",
+    "External attack-surface monitoring",
+    "Findings and remediation workflow",
+    "Verified rescans and evidence history",
+    "Secure multi-tenant architecture"
+  ]
+}
