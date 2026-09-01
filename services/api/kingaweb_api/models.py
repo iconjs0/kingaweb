@@ -32,6 +32,13 @@ class VerificationMethod(StrEnum):
     HTTP_FILE = "http_file"
 
 
+class VerificationOutcome(StrEnum):
+    VERIFIED = "verified"
+    NOT_FOUND = "not_found"
+    EXPIRED = "expired"
+    RATE_LIMITED = "rate_limited"
+
+
 class ScanStatus(StrEnum):
     COMPLETED = "completed"
     FAILED = "failed"
@@ -115,6 +122,25 @@ class DomainVerification(Base):
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     asset: Mapped[Asset] = relationship(back_populates="verifications")
+    attempts: Mapped[list["VerificationAttempt"]] = relationship(
+        back_populates="verification", cascade="all, delete-orphan"
+    )
+
+
+class VerificationAttempt(Base):
+    __tablename__ = "verification_attempts"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    verification_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("domain_verifications.id", ondelete="CASCADE"), index=True
+    )
+    requested_by_user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    outcome: Mapped[VerificationOutcome] = mapped_column(
+        Enum(VerificationOutcome, native_enum=False)
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+    verification: Mapped[DomainVerification] = relationship(back_populates="attempts")
 
 
 class ScanRun(Base):

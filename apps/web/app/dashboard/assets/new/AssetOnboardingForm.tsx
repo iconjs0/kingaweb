@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import {
   type ChallengeState,
   registerAsset,
+  renewVerificationChallenge,
   verifyRegisteredAsset,
 } from "./actions";
 
@@ -12,7 +13,10 @@ const initialState: ChallengeState = { status: "idle" };
 export function AssetOnboardingForm({ workspaceId }: { workspaceId: string }) {
   const [state, registerAction, registering] = useActionState(registerAsset, initialState);
   const [verification, verifyAction, verifying] = useActionState(verifyRegisteredAsset, state);
-  const active = verification.status === "idle" ? state : verification;
+  const [renewal, renewAction, renewing] = useActionState(renewVerificationChallenge, state);
+  const active = renewal.status !== "idle" && renewal.assetId
+    ? renewal
+    : verification.status === "idle" ? state : verification;
 
   if (active.status === "verified") {
     return <div className="verificationSuccess"><span>✓</span><h2>Ownership verified</h2><p>KingaWeb can now schedule safe monitoring for <b>{active.hostname}</b>.</p><a className="button" href="/dashboard">Return to dashboard</a></div>;
@@ -25,7 +29,8 @@ export function AssetOnboardingForm({ workspaceId }: { workspaceId: string }) {
       {active.message && <p className="formError">{active.message}</p>}
       <dl><div><dt>Method</dt><dd>{isHttp ? "HTTPS file" : "DNS TXT"}</dd></div><div><dt>{isHttp ? "URL" : "Name / host"}</dt><dd>{challenge.verificationName}</dd></div><div><dt>Value</dt><dd>{challenge.verificationValue}</dd></div></dl>
       <p className="challengeExpiry">Challenge expires {challenge.expiresAt ? new Date(challenge.expiresAt).toLocaleString() : "in 24 hours"}. The value is shown only in this session.</p>
-      <form action={verifyAction}><input type="hidden" name="workspace_id" value={challenge.workspaceId} /><input type="hidden" name="asset_id" value={challenge.assetId} /><input type="hidden" name="hostname" value={challenge.hostname} /><input type="hidden" name="verification_method" value={challenge.verificationMethod} /><input type="hidden" name="verification_name" value={challenge.verificationName} /><input type="hidden" name="verification_value" value={challenge.verificationValue} /><input type="hidden" name="expires_at" value={challenge.expiresAt} /><button className="button" type="submit" disabled={verifying}>{verifying ? "Checking proof…" : `Verify ${isHttp ? "HTTPS file" : "DNS record"}`}</button></form>
+      <form action={verifyAction}><input type="hidden" name="workspace_id" value={challenge.workspaceId} /><input type="hidden" name="asset_id" value={challenge.assetId} /><input type="hidden" name="hostname" value={challenge.hostname} /><input type="hidden" name="verification_method" value={challenge.verificationMethod} /><input type="hidden" name="verification_name" value={challenge.verificationName} /><input type="hidden" name="verification_value" value={challenge.verificationValue} /><input type="hidden" name="expires_at" value={challenge.expiresAt} /><button className="button" type="submit" disabled={verifying || renewing}>{verifying ? "Checking proof…" : `Verify ${isHttp ? "HTTPS file" : "DNS record"}`}</button></form>
+      <form action={renewAction}><input type="hidden" name="workspace_id" value={challenge.workspaceId} /><input type="hidden" name="asset_id" value={challenge.assetId} /><input type="hidden" name="hostname" value={challenge.hostname} /><input type="hidden" name="verification_method" value={challenge.verificationMethod} /><input type="hidden" name="verification_name" value={challenge.verificationName} /><input type="hidden" name="verification_value" value={challenge.verificationValue} /><input type="hidden" name="expires_at" value={challenge.expiresAt} /><button className="textButton" type="submit" disabled={verifying || renewing}>{renewing ? "Generating…" : "Generate a new challenge"}</button></form>
     </div>;
   }
 

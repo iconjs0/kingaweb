@@ -11,7 +11,7 @@ import dns.exception
 import dns.resolver
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -23,13 +23,17 @@ from .models import (
     DomainVerification,
     Membership,
     User,
+    VerificationAttempt,
     VerificationMethod,
+    VerificationOutcome,
     WorkspaceRole,
 )
 from .network import resolve_public_addresses
 
 router = APIRouter(prefix="/v1/workspaces/{workspace_id}/assets", tags=["Assets"])
 WRITE_ROLES = {WorkspaceRole.OWNER, WorkspaceRole.ADMIN, WorkspaceRole.ANALYST}
+VERIFICATION_ATTEMPT_LIMIT = 5
+VERIFICATION_ATTEMPT_WINDOW = timedelta(minutes=10)
 PrincipalDep = Annotated[Principal, Depends(get_current_principal)]
 DatabaseDep = Annotated[Session, Depends(get_db)]
 
@@ -155,6 +159,35 @@ class AssetVerificationResult(BaseModel):
     verified_at: datetime | None = None
 
 
+def issue_verification_challenge(
+    asset: Asset, method: VerificationMethod, db: Session
+) -> AssetCreated:
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.now(UTC) + timedelta(hours=24)
+    verification = DomainVerification(
+        asset=asset,
+        method=method,
+        token_hash=hashlib.sha256(token.encode()).hexdigest(),
+        expires_at=expires_at,
+    )
+    db.add(verification)
+    db.commit()
+    verification_name = (
+        f"_kingaweb-verification.{asset.hostname}"
+        if method == VerificationMethod.DNS_TXT
+        else f"https://{asset.hostname}/.well-known/kingaweb-verification.txt"
+    )
+    return AssetCreated(
+        id=asset.id,
+        hostname=asset.hostname,
+        status=asset.status.value,
+        verification_method=method,
+        verification_name=verification_name,
+        verification_value=f"kingaweb-verification={token}",
+        expires_at=expires_at,
+    )
+
+
 def require_workspace_member(
     db: Session, workspace_id: uuid.UUID, principal: Principal, allowed_roles: set[WorkspaceRole]
 ) -> tuple[User, Membership]:
@@ -182,39 +215,50 @@ def create_asset(
     db: DatabaseDep,
 ) -> AssetCreated:
     user, _ = require_workspace_member(db, workspace_id, principal, WRITE_ROLES)
-    token = secrets.token_urlsafe(32)
-    expires_at = datetime.now(UTC) + timedelta(hours=24)
     asset = Asset(workspace_id=workspace_id, hostname=request.hostname, created_by_user_id=user.id)
-    verification = DomainVerification(
-        asset=asset,
-        method=request.verification_method,
-        token_hash=hashlib.sha256(token.encode()).hexdigest(),
-        expires_at=expires_at,
-    )
-    db.add_all([asset, verification])
+    db.add(asset)
     try:
-        db.commit()
+        db.flush()
     except IntegrityError as error:
         db.rollback()
         raise HTTPException(
             status_code=409, detail="Asset already exists in this workspace"
         ) from error
+    return issue_verification_challenge(asset, request.verification_method, db)
 
-    verification_name = (
-        f"_kingaweb-verification.{asset.hostname}"
-        if verification.method == VerificationMethod.DNS_TXT
-        else f"https://{asset.hostname}/.well-known/kingaweb-verification.txt"
+
+@router.post("/{asset_id}/verification-challenge", response_model=AssetCreated)
+def renew_verification_challenge(
+    workspace_id: uuid.UUID,
+    asset_id: uuid.UUID,
+    request: AssetCreate,
+    principal: PrincipalDep,
+    db: DatabaseDep,
+) -> AssetCreated:
+    require_workspace_member(db, workspace_id, principal, WRITE_ROLES)
+    asset = db.scalar(select(Asset).where(Asset.id == asset_id, Asset.workspace_id == workspace_id))
+    if asset is None:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    if asset.status == AssetStatus.VERIFIED:
+        raise HTTPException(status_code=409, detail="Verified assets do not need a new challenge")
+    if request.hostname != asset.hostname:
+        raise HTTPException(status_code=400, detail="Challenge hostname does not match the asset")
+    latest = db.scalar(
+        select(DomainVerification)
+        .where(DomainVerification.asset_id == asset.id)
+        .order_by(DomainVerification.created_at.desc())
     )
-    verification_value = f"kingaweb-verification={token}"
-    return AssetCreated(
-        id=asset.id,
-        hostname=asset.hostname,
-        status=asset.status.value,
-        verification_method=verification.method,
-        verification_name=verification_name,
-        verification_value=verification_value,
-        expires_at=expires_at,
-    )
+    if latest is not None:
+        created_at = latest.created_at
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=UTC)
+        if created_at > datetime.now(UTC) - timedelta(minutes=1):
+            raise HTTPException(
+                status_code=429,
+                detail="Wait one minute before generating another verification challenge.",
+                headers={"Retry-After": "60"},
+            )
+    return issue_verification_challenge(asset, request.verification_method, db)
 
 
 @router.post("/{asset_id}/verify", response_model=AssetVerificationResult)
@@ -226,7 +270,7 @@ def verify_asset(
     txt_lookup: TxtLookupDep,
     http_proof_lookup: HttpProofLookupDep,
 ) -> AssetVerificationResult:
-    require_workspace_member(db, workspace_id, principal, WRITE_ROLES)
+    user, _ = require_workspace_member(db, workspace_id, principal, WRITE_ROLES)
     asset = db.scalar(select(Asset).where(Asset.id == asset_id, Asset.workspace_id == workspace_id))
     if asset is None:
         raise HTTPException(status_code=404, detail="Asset not found")
@@ -248,10 +292,40 @@ def verify_asset(
     )
     if verification is None:
         raise HTTPException(status_code=409, detail="No active verification challenge")
+    window_started_at = datetime.now(UTC) - VERIFICATION_ATTEMPT_WINDOW
+    recent_attempts = db.scalar(
+        select(func.count(VerificationAttempt.id)).where(
+            VerificationAttempt.verification_id == verification.id,
+            VerificationAttempt.created_at >= window_started_at,
+            VerificationAttempt.outcome != VerificationOutcome.RATE_LIMITED,
+        )
+    ) or 0
+    if recent_attempts >= VERIFICATION_ATTEMPT_LIMIT:
+        db.add(
+            VerificationAttempt(
+                verification_id=verification.id,
+                requested_by_user_id=user.id,
+                outcome=VerificationOutcome.RATE_LIMITED,
+            )
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=429,
+            detail="Too many verification attempts. Try again in 10 minutes.",
+            headers={"Retry-After": "600"},
+        )
     expires_at = verification.expires_at
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=UTC)
     if expires_at <= datetime.now(UTC):
+        db.add(
+            VerificationAttempt(
+                verification_id=verification.id,
+                requested_by_user_id=user.id,
+                outcome=VerificationOutcome.EXPIRED,
+            )
+        )
+        db.commit()
         raise HTTPException(status_code=410, detail="Verification challenge has expired")
 
     records = (
@@ -268,6 +342,14 @@ def verify_asset(
         for record in records
     )
     if not matched:
+        db.add(
+            VerificationAttempt(
+                verification_id=verification.id,
+                requested_by_user_id=user.id,
+                outcome=VerificationOutcome.NOT_FOUND,
+            )
+        )
+        db.commit()
         return AssetVerificationResult(
             verified=False,
             status=asset.status.value,
@@ -282,6 +364,13 @@ def verify_asset(
     verification.verified_at = verified_at
     asset.verified_at = verified_at
     asset.status = AssetStatus.VERIFIED
+    db.add(
+        VerificationAttempt(
+            verification_id=verification.id,
+            requested_by_user_id=user.id,
+            outcome=VerificationOutcome.VERIFIED,
+        )
+    )
     db.commit()
     return AssetVerificationResult(
         verified=True,

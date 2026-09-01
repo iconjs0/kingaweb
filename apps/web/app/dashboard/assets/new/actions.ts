@@ -80,3 +80,47 @@ export async function verifyRegisteredAsset(
   revalidatePath("/dashboard");
   return { ...challenge, status: "verified", message: "Domain ownership verified." };
 }
+
+export async function renewVerificationChallenge(
+  _previous: ChallengeState,
+  formData: FormData,
+): Promise<ChallengeState> {
+  const workspaceId = String(formData.get("workspace_id") ?? "");
+  const assetId = String(formData.get("asset_id") ?? "");
+  const hostname = String(formData.get("hostname") ?? "");
+  const verificationMethod = String(formData.get("verification_method") ?? "dns_txt");
+  const response = await authenticatedRequest(
+    `/v1/workspaces/${workspaceId}/assets/${assetId}/verification-challenge`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hostname, verification_method: verificationMethod }),
+    },
+  );
+  if (!response) return initialError("Your session expired. Sign in again.");
+  const payload = await response.json();
+  if (!response.ok) {
+    return {
+      status: "error",
+      message: payload.detail ?? "Unable to generate a new challenge.",
+      workspaceId,
+      assetId,
+      hostname,
+      verificationMethod: verificationMethod as "dns_txt" | "http_file",
+      verificationName: String(formData.get("verification_name") ?? ""),
+      verificationValue: String(formData.get("verification_value") ?? ""),
+      expiresAt: String(formData.get("expires_at") ?? ""),
+    };
+  }
+  return {
+    status: "challenge",
+    workspaceId,
+    assetId,
+    hostname: payload.hostname,
+    verificationMethod: payload.verification_method,
+    verificationName: payload.verification_name,
+    verificationValue: payload.verification_value,
+    expiresAt: payload.expires_at,
+    message: "A new verification challenge was generated. Replace the previous proof value.",
+  };
+}

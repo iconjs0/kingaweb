@@ -1,4 +1,5 @@
 import hashlib
+import os
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -7,7 +8,14 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from kingaweb_api.assets import AssetCreate, create_asset, normalize_hostname, verify_asset
+from kingaweb_api.assets import (
+    AssetCreate,
+    create_asset,
+    lookup_http_proof,
+    normalize_hostname,
+    renew_verification_challenge,
+    verify_asset,
+)
 from kingaweb_api.auth import Principal
 from kingaweb_api.models import (
     Asset,
@@ -16,7 +24,9 @@ from kingaweb_api.models import (
     DomainVerification,
     Membership,
     User,
+    VerificationAttempt,
     VerificationMethod,
+    VerificationOutcome,
     Workspace,
     WorkspaceRole,
 )
@@ -78,6 +88,50 @@ def test_viewer_cannot_create_asset(db: Session) -> None:
     assert error.value.status_code == 403
 
 
+def test_expired_challenge_can_be_renewed_with_a_new_token(db: Session) -> None:
+    workspace, principal = seed_member(db, WorkspaceRole.OWNER)
+    created = create_asset(workspace.id, AssetCreate(hostname="example.co.tz"), principal, db)
+    original = db.scalar(select(DomainVerification))
+    assert original is not None
+    original.created_at = datetime.now(UTC) - timedelta(minutes=2)
+    original.expires_at = datetime.now(UTC) - timedelta(minutes=1)
+    db.commit()
+
+    renewed = renew_verification_challenge(
+        workspace.id,
+        created.id,
+        AssetCreate(hostname=created.hostname, verification_method=VerificationMethod.HTTP_FILE),
+        principal,
+        db,
+    )
+
+    challenges = db.scalars(
+        select(DomainVerification).order_by(DomainVerification.created_at)
+    ).all()
+    assert len(challenges) == 2
+    assert renewed.verification_method == VerificationMethod.HTTP_FILE
+    assert renewed.verification_value != created.verification_value
+    assert challenges[-1].token_hash == hashlib.sha256(
+        renewed.verification_value.removeprefix("kingaweb-verification=").encode()
+    ).hexdigest()
+
+
+def test_challenge_renewal_has_a_one_minute_cooldown(db: Session) -> None:
+    workspace, principal = seed_member(db, WorkspaceRole.OWNER)
+    created = create_asset(workspace.id, AssetCreate(hostname="example.co.tz"), principal, db)
+
+    with pytest.raises(HTTPException) as error:
+        renew_verification_challenge(
+            workspace.id,
+            created.id,
+            AssetCreate(hostname=created.hostname),
+            principal,
+            db,
+        )
+
+    assert error.value.status_code == 429
+
+
 def test_non_member_receives_not_found(db: Session) -> None:
     workspace, _ = seed_member(db, WorkspaceRole.OWNER)
     outsider = Principal(subject="oidc|outsider", email="outsider@example.com", name=None)
@@ -106,6 +160,9 @@ def test_matching_dns_record_verifies_asset(db: Session) -> None:
     assert asset is not None
     assert asset.status == AssetStatus.VERIFIED
     assert asset.verified_at is not None
+    attempt = db.scalar(select(VerificationAttempt))
+    assert attempt is not None
+    assert attempt.outcome == VerificationOutcome.VERIFIED
 
 
 def test_wrong_or_unprefixed_dns_record_does_not_verify_asset(db: Session) -> None:
@@ -126,6 +183,9 @@ def test_wrong_or_unprefixed_dns_record_does_not_verify_asset(db: Session) -> No
     assert result.verified is False
     assert asset is not None
     assert asset.status == AssetStatus.PENDING_VERIFICATION
+    attempt = db.scalar(select(VerificationAttempt))
+    assert attempt is not None
+    assert attempt.outcome == VerificationOutcome.NOT_FOUND
 
 
 def test_expired_dns_challenge_is_rejected(db: Session) -> None:
@@ -142,6 +202,30 @@ def test_expired_dns_challenge_is_rejected(db: Session) -> None:
         )
 
     assert error.value.status_code == 410
+    attempt = db.scalar(select(VerificationAttempt))
+    assert attempt is not None
+    assert attempt.outcome == VerificationOutcome.EXPIRED
+
+
+def test_verification_attempts_are_rate_limited_and_audited(db: Session) -> None:
+    workspace, principal = seed_member(db, WorkspaceRole.OWNER)
+    created = create_asset(workspace.id, AssetCreate(hostname="example.co.tz"), principal, db)
+
+    for _ in range(5):
+        result = verify_asset(
+            workspace.id, created.id, principal, db, lambda name: [], lambda hostname: None
+        )
+        assert result.verified is False
+
+    with pytest.raises(HTTPException) as error:
+        verify_asset(
+            workspace.id, created.id, principal, db, lambda name: [], lambda hostname: None
+        )
+
+    assert error.value.status_code == 429
+    attempts = db.scalars(select(VerificationAttempt)).all()
+    assert [attempt.outcome for attempt in attempts].count(VerificationOutcome.NOT_FOUND) == 5
+    assert attempts[-1].outcome == VerificationOutcome.RATE_LIMITED
 
 
 def test_viewer_cannot_verify_asset(db: Session) -> None:
@@ -188,3 +272,37 @@ def test_matching_https_file_verifies_asset(db: Session) -> None:
         "https://lab.example.com/.well-known/kingaweb-verification.txt"
     )
     assert result.verified is True
+
+
+@pytest.mark.skipif(
+    os.getenv("KINGAWEB_RUN_LIVE_LAB_TEST") != "1",
+    reason="Live Security Lab integration test is opt-in",
+)
+def test_live_security_lab_https_proof_verifies_asset(db: Session) -> None:
+    workspace, principal = seed_member(db, WorkspaceRole.OWNER)
+    proof_token = "kingaweb-security-lab-authorized-test"
+    created = create_asset(
+        workspace.id,
+        AssetCreate(
+            hostname="kingaweb-security-lab.cyberb008.chatgpt.site",
+            verification_method=VerificationMethod.HTTP_FILE,
+        ),
+        principal,
+        db,
+    )
+    verification = db.scalar(select(DomainVerification))
+    assert verification is not None
+    verification.token_hash = hashlib.sha256(proof_token.encode()).hexdigest()
+    db.commit()
+
+    result = verify_asset(
+        workspace.id,
+        created.id,
+        principal,
+        db,
+        lambda name: [],
+        lookup_http_proof,
+    )
+
+    assert result.verified is True
+    assert result.status == AssetStatus.VERIFIED.value
